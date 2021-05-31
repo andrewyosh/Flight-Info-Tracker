@@ -17,9 +17,9 @@ namespace FlightInfoWinforms.Presenters
     public class FlightInfoPresenter
     {
         private readonly IFlightInfoView _view;
-        private static HttpClient _client;
+        private HttpClient _client;
         private CancellationTokenSource _cts;
-        private static int _pollTime;
+        private int _pollTime;
         private System.Random _random;
         private string _apiKey;
 

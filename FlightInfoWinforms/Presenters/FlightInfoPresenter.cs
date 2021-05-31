@@ -48,15 +48,7 @@ namespace FlightInfoWinforms.Presenters
         public async Task GetData()
         {
             while (true)
-            {
-                //Check if task should be cancelled
-                if (_cts.IsCancellationRequested)
-                {
-                    _view.ShowMessage("Polling aborted");
-                    _cts = new CancellationTokenSource();
-                    break;
-                }
-
+            {                
                 var arrivedResultsTask = GetFlightInfoAsync("Arrived", "ATL", "10", "ga", "0");
                 var departedResultsTask = GetFlightInfoAsync("Departed", "ATL", "10", "ga", "0");
                 var enrouteResultsTask = GetFlightInfoAsync("Enroute", "ATL", "10", "ga", "0");

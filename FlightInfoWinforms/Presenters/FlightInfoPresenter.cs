@@ -21,10 +21,10 @@ namespace FlightInfoWinforms.Presenters
         private CancellationTokenSource _cts;
         private static int _pollTime;
         private System.Random _random;
-        private string apiKey;
+        private string _apiKey;
 
         //constructor dependency injection 
-        public FlightInfoPresenter(IFlightInfoView view) 
+        public FlightInfoPresenter(IFlightInfoView view)
         {
             _view = view;
             view.Presenter = this;
@@ -37,26 +37,25 @@ namespace FlightInfoWinforms.Presenters
 
             _client = new HttpClient();
             _client.BaseAddress = new Uri("http://flightxml.flightaware.com/json/FlightXML2/");
-            apiKey = File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "Api_key.txt");
-            var credentials = Encoding.ASCII.GetBytes(apiKey);
+            _apiKey = File.ReadAllText(AppDomain.CurrentDomain.BaseDirectory + "Api_key.txt");
+            var credentials = Encoding.ASCII.GetBytes(_apiKey);
             _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(credentials));
             _client.DefaultRequestHeaders.Accept.Clear();
             _client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             _client.Timeout = TimeSpan.FromMilliseconds(Timeout.Infinite);
         }
 
-        public async Task GetData() 
+        public async Task GetData()
         {
             while (true)
             {
                 //Check if task should be cancelled
-                if (_cts.IsCancellationRequested) 
+                if (_cts.IsCancellationRequested)
                 {
                     _view.ShowMessage("Polling aborted");
                     _cts = new CancellationTokenSource();
                     break;
                 }
-                
 
                 var arrivedResultsTask = GetFlightInfoAsync("Arrived", "ATL", "10", "ga", "0");
                 var departedResultsTask = GetFlightInfoAsync("Departed", "ATL", "10", "ga", "0");
@@ -64,36 +63,36 @@ namespace FlightInfoWinforms.Presenters
 
                 //Check when any task is finished and display results on view
                 var flightResultsTasks = new List<Task> { arrivedResultsTask, departedResultsTask, enrouteResultsTask };
-                while (flightResultsTasks.Count > 0) 
+                while (flightResultsTasks.Count > 0)
                 {
                     Task finishedTask = await Task.WhenAny(flightResultsTasks);
                     if (finishedTask == arrivedResultsTask)
                     {
                         string arrivedResultsContent = await arrivedResultsTask;
                         ArrivedResults arrivedResults = JsonConvert.DeserializeObject<ArrivedResults>(arrivedResultsContent);
-                        UpdateArrivalsList(arrivedResults);                        
+                        _view.ArrivalData = arrivedResults.ArrivedResult.arrivals;
                     }
                     else if (finishedTask == departedResultsTask)
                     {
                         string departedResultsContent = await departedResultsTask;
                         DepartedResults departedResults = JsonConvert.DeserializeObject<DepartedResults>(departedResultsContent);
-                        UpdateDeparturesList(departedResults);                        
+                        _view.DepartureData = departedResults.DepartedResult.departures;
                     }
-                    else 
+                    else
                     {
                         string enrouteResultsContent = await enrouteResultsTask;
                         EnrouteResults enrouteResults = JsonConvert.DeserializeObject<EnrouteResults>(enrouteResultsContent);
-                        UpdateEnroutesList(enrouteResults);                        
+                        _view.EnrouteData = enrouteResults.EnrouteResult.enroute;
                     }
                     flightResultsTasks.Remove(finishedTask);
-                }                    
+                }
                 _view.ShowMessage("All Results Ready! Re-polling in " + _pollTime / 1000 + " seconds...");
                 //Wait specified time, cancel if requested
                 try
                 {
                     await Task.Delay(_pollTime, _cts.Token);
                 }
-                catch 
+                catch
                 {
                     _view.ShowMessage("Polling aborted");
                     _cts = new CancellationTokenSource();
@@ -101,26 +100,11 @@ namespace FlightInfoWinforms.Presenters
                 }
             }
         }
-        public void CancelTask() 
+        public void CancelTask()
         {
             _cts.Cancel();
         }
-        private void UpdateArrivalsList(ArrivedResults arrivedResults) 
-        {
-            //Update arrival results list view
-            _view.ArrivalData = arrivedResults.ArrivedResult.arrivals;
-        }
-        private void UpdateDeparturesList(DepartedResults departedResults) 
-        {
-            //Update departure results list view
-            _view.DepartureData = departedResults.DepartedResult.departures;
-        }
-        private void UpdateEnroutesList(EnrouteResults enrouteResults)
-        {
-            //Update enroute results list view
-            _view.EnrouteData = enrouteResults.EnrouteResult.enroute;
-        }        
-        private async Task<string> GetFlightInfoAsync(string infoType,  string airport, string howMany, string filter, string offset)
+        private async Task<string> GetFlightInfoAsync(string infoType, string airport, string howMany, string filter, string offset)
         {
 
             // Build uri based on input parameters
@@ -133,7 +117,7 @@ namespace FlightInfoWinforms.Presenters
             builder.Query = query.ToString();
 
             //Set action to update the different possible statuses (arrived, departed, enroute)
-            Action<string> UpdateStatus;            
+            Action<string> UpdateStatus;
             if (infoType == "Arrived")
             {
                 UpdateStatus = status => _view.arrivalStatus = status;
@@ -142,25 +126,25 @@ namespace FlightInfoWinforms.Presenters
             {
                 UpdateStatus = status => _view.departureStatus = status;
             }
-            else 
+            else
             {
                 UpdateStatus = status => _view.enrouteStatus = status;
             }
-            
-            string content = "";            
+
+            string content = "";
             UpdateStatus("Sending request for " + infoType + " data");
             await Task.Delay(_random.Next(0, 2000)); //artificial delay                
             //Request response from API
             HttpResponseMessage response = await _client.GetAsync(builder.Uri.ToString());
-            UpdateStatus("Response for " + infoType + " received");            
+            UpdateStatus("Response for " + infoType + " received");
             if (response.IsSuccessStatusCode)
             {
-                UpdateStatus("Reading " + infoType + " data");                                
-                await Task.Delay(_random.Next(0,2000)); //artificial delay                
+                UpdateStatus("Reading " + infoType + " data");
+                await Task.Delay(_random.Next(0, 2000)); //artificial delay                
                 //Read response content
                 content = await response.Content.ReadAsStringAsync();
-                UpdateStatus("Done!");                
-            }            
+                UpdateStatus("Done!");
+            }
             return content;
         }
 
